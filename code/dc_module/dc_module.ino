@@ -17,6 +17,11 @@
 #define BTN3 10 
 #define BTN4 11 
 
+#define MOTOR1_ENCODER_A 2
+#define MOTOR1_ENCODER_B A0
+#define MOTOR2_ENCODER_A 3
+#define MOTOR2_ENCODER_B A1
+
 void setup() {
   // 전원 입력시 삑 (1번)
   pinMode(BeepPin, OUTPUT);
@@ -60,8 +65,45 @@ void beep(int time)
   pinMode(BTN4, INPUT);
   attachPCINT( digitalPinToPCINT(BTN4), button4_press, FALLING);
 
+  // 초기화6, DC모터 엔코더
+  pinMode(MOTOR1_ENCODER_A, INPUT);
+  attachInterrupt(digitalPinToInterrupt(MOTOR1_ENCODER_A), ISR_motor1, FALLING);
+  pinMode(MOTOR2_ENCODER_A, INPUT);
+  attachInterrupt(digitalPinToInterrupt(MOTOR2_ENCODER_A), ISR_motor2, FALLING);
 
 }
+
+int motor1_position = 0;
+int motor1_direction = 1; // 1:정방향, 0:역방향
+int motor2_position = 0;
+int motor2_direction = 1; // 1:정방향, 0:역방향
+
+void ISR_motor1() {
+  // 120 카운트 = 1바퀴
+  motor1_position++; //카운트
+
+  // 방향체크
+  byte encoderB = digitalRead(MOTOR1_ENCODER_B);
+  if (encoderB == HIGH) {
+    motor1_direction = 0;
+  } else {
+    motor1_direction = 1;
+  }
+}
+
+void ISR_motor2() {
+  // 120 카운트 = 1바퀴
+  motor2_position++; //카운트
+
+  // 방향체크
+  byte encoderB = digitalRead(MOTOR2_ENCODER_B);
+  if (encoderB == HIGH) {
+    motor2_direction = 0;
+  } else {
+    motor2_direction = 1;
+  }
+}
+
 
 int btn1_status = 0;
 void button1_press() {
@@ -104,6 +146,7 @@ void builtin_led_blank(int time=1000) {
 // 모터속도 지정
 int m1_speed = 255, m2_speed=255;
 char mode;
+int m1_target = 0, m2_target = 0;
 void loop() {
   builtin_led_blank(500); // 0.5초 깜빡임
 
@@ -136,8 +179,23 @@ void loop() {
         m2_speed = m1_speed;
         Serial.print("speed is ");
         Serial.println(m1_speed);
+      } else if (cmd == 101) { // e
+        m1_target = m1_target * 10 + (cmd - 48); 
+        Serial.print("m1 target ");
+        Serial.println(m1_target);
+      } else if (cmd == 102) { // f
+        m1_target = m1_target * 10 + (cmd - 48);
+        Serial.print("m1 target ");
+        Serial.println(m1_target);
+      } else if (cmd == 103) { // g
+        m2_target = m1_target * 10 + (cmd - 48);
+        Serial.print("m1 target ");
+        Serial.println(m1_target);
+      } else if (cmd == 104) { // h
+        m2_target = m1_target * 10 + (cmd - 48);
+        Serial.print("m1 target ");
+        Serial.println(m1_target);
       }
-      
       
       Serial.print(cmd);
     } else if(cmd == 97) { //a
@@ -156,6 +214,19 @@ void loop() {
       // 모터2 (역회전)
       M2_stop();
       M2_CCW();
+    } else if(cmd == 101) { //e
+      // 지정거리 이동
+      mode = cmd;
+      m1_target = 0;
+    } else if(cmd == 102) { //f
+      mode = cmd;
+      m1_target = 0;
+    } else if(cmd == 103) { //g
+      mode = cmd;
+      m2_target = 0;
+    } else if(cmd == 104) { //h
+      mode = cmd;
+      m2_target = 0;
     } else if(cmd == 115) { //s
       // 모터2 (역회전)
       M1_stop();
@@ -282,6 +353,13 @@ void M1_stop()
   // 0,0 
   digitalWrite(DC1_1, LOW);
   digitalWrite(DC1_2, LOW);
+
+  Serial.print("motor1 direction = ");
+  Serial.print(motor1_direction);
+
+  Serial.print(", motor1 position = ");
+  Serial.println(motor1_position);
+
 }
 
 void M2_stop()
