@@ -8,8 +8,8 @@
 
 // L298n 모터연결
 #define DC1_1 4 // IN1
-#define DC1_2 5 // IN2
-#define DC2_1 6 // IN3
+#define DC1_2 5 // IN2, PWM
+#define DC2_1 6 // IN3, PWM
 #define DC2_2 7 // IN4
 
 #define BTN1 8 
@@ -66,59 +66,29 @@ void beep(int time)
 int btn1_status = 0;
 void button1_press() {
   int temp = digitalRead(BTN1);
-  Serial.print(temp);
-
-  if(temp == 0) {
-    // 토글
-    if(btn1_status== 1) {
-      btn1_status = 0;
-    } else {
-      btn1_status = 1;
-    }
-    Serial.println("btn1 pressed");
-  }
+  btn1_status = 1;
+  Serial.println("btn1 pressed");
 }
 
 int btn2_status = 0;
 void button2_press() {
   int temp = digitalRead(BTN2);
-  if(temp == 0) {
-    // 토글
-    if(btn2_status== 1) {
-      btn2_status = 0;
-    } else {
-      btn2_status = 1;
-    }
-    Serial.println("btn2 pressed");
-  }
+  btn2_status = 1;
+  Serial.println("btn2 pressed");
 }
 
 int btn3_status = 0;
 void button3_press() {
   int temp = digitalRead(BTN3);
-  if(temp == 0) {
-    // 토글
-    if(btn3_status== 1) {
-      btn3_status = 0;
-    } else {
-      btn3_status = 1;
-    }
-    Serial.println("btn3 pressed");
-  }
+  btn3_status = 1;
+  Serial.println("btn3 pressed");
 }
 
 int btn4_status = 0;
 void button4_press() {
   int temp = digitalRead(BTN4);
-  if(temp == 0) {
-    // 토글
-    if(btn4_status== 1) {
-      btn4_status = 0;
-    } else {
-      btn4_status = 1;
-    }
-    Serial.println("btn4 pressed");
-  }
+  btn4_status = 1;
+  Serial.println("btn4 pressed");
 }
 
 /**
@@ -131,79 +101,149 @@ void builtin_led_blank(int time=1000) {
   delay(time);                      // wait for a second
 }
 
+// 모터속도 지정
+int m1_speed = 255, m2_speed=255;
+char mode;
 void loop() {
   builtin_led_blank(500); // 0.5초 깜빡임
-  //Serial.print("btn1=");
-  //Serial.print(btn1_status);
-  //Serial.print("btn2=");
-  //Serial.println(btn2_status);
-
 
   if(btn1_status == 1) {
-    Serial.println("Motor1_CW");
-    M1_stop();
-    M1_CW();
-  } else {
-    if(btn2_status == 0) {
-      Serial.println("Motor1_STOP");
-      M1_stop();
-    }
+    M1_CW_step();
   }
-
 
   if(btn2_status == 1) {
-    Serial.println("Motor1_CCW");
-    M1_stop();
-    M1_CCW();
-  } else {
-    if(btn1_status == 0) {
-      Serial.println("Motor1_STOP");
-      M1_stop();
-    }
+    M1_CCW_step();
   }
 
-  
   if(btn3_status == 1) {
-    Serial.println("Motor2_CW");
-    M2_stop();
-    M2_CW();
-  } else {
-    if(btn4_status == 0) {
-      Serial.println("Motor2_STOP");
-      M2_stop();
-    }
+    M2_CW_step();
   }
-
 
   if(btn4_status == 1) {
-    Serial.println("Motor2_CCW");
-    M2_stop();
-    M2_CCW();
-  } else {
-    if(btn3_status == 0) {
-      Serial.println("Motor2_STOP");
-      M2_stop();
-    }
+    M2_CCW_step();
   }
 
+  char cmd;
+  
+  if(Serial.available()){
+    cmd = Serial.read();
 
-
-
-
-
+    if(cmd == 10) { 
+      // lf code (10)
+    } else if( cmd >= 48 && cmd <= 57) {
+      if(mode == 112) { //pwm set
+        m1_speed = m1_speed * 10 + (cmd - 48); 
+        m2_speed = m1_speed;
+        Serial.print("speed is ");
+        Serial.println(m1_speed);
+      }
+      
+      
+      Serial.print(cmd);
+    } else if(cmd == 97) { //a
+      // 모터1 (정회전)
+      M1_stop();
+      M1_CW();
+    } else if(cmd == 98) { //b
+      // 모터1 (역회전)
+      M1_stop();
+      M1_CCW();
+    } else if(cmd == 99) { //c
+      // 모터2 (정회전)
+      M2_stop();
+      M2_CW();
+    } else if(cmd == 100) { //d
+      // 모터2 (역회전)
+      M2_stop();
+      M2_CCW();
+    } else if(cmd == 115) { //s
+      // 모터2 (역회전)
+      M1_stop();
+      M2_stop();
+    } else if(cmd == 112) { //p
+      // pwm 속도조절
+      mode = cmd;
+      m1_speed = 0;
+      Serial.println("pwn speed set");
+    } else if(cmd == 109) { // m(109) 값 전달 받은 경우 이동
+      //motor_move(received_pos);
+      //received_pos = 0;
+    } else if(cmd == 100) { // d
+      //Serial.print("max distance = ");
+      //Serial.println(motor_stop_max);
+    } else if(cmd == 99) { // c
+      //Serial.print("current position = ");
+      //Serial.println(motor_position);
+    }
+  }
 }
+
+// 누르는 동작
+void M1_CW_step() {
+  int temp;
+  M1_CW();
+
+  while(btn1_status) {
+    temp = digitalRead(BTN1);
+    if(temp == 1) {
+      M1_stop();
+      btn1_status = 0;
+    }
+  }
+}
+
+void M1_CCW_step() {
+  int temp;
+  M1_CCW();
+
+  while(btn2_status) {
+    temp = digitalRead(BTN2);
+    if(temp == 1) {
+      M1_stop();
+      btn2_status = 0;
+    }
+  }
+}
+
+void M2_CW_step() {
+  int temp;
+  M2_CW();
+
+  while(btn3_status) {
+    temp = digitalRead(BTN3);
+    if(temp == 1) {
+      M2_stop();
+      btn3_status = 0;
+    }
+  }
+}
+
+void M2_CCW_step() {
+  int temp;
+  M2_CCW();
+
+  while(btn4_status) {
+    temp = digitalRead(BTN4);
+    if(temp == 1) {
+      M2_stop();
+      btn4_status = 0;
+    }
+  }
+}
+
 
 // Motor1 정방향 회전
 void M1_CW() {
   // 1, 0
-  digitalWrite(DC1_1, HIGH);
-  digitalWrite(DC1_2, LOW);
-}
 
-void M2_CW() {
-  // 1, 0
-  digitalWrite(DC2_1, HIGH);
-  digitalWrite(DC2_2, LOW);
+  // digitalWrite(DC1_1, HIGH);
+  // PWM (펄스폭)
+  //# analogWrite(DC1_1,m1_speed);
+  //# digitalWrite(DC1_2, LOW);
+  // 정방향, 0값 최대속도
+  digitalWrite(DC1_1, HIGH);
+  int speed = 255 - m1_speed;
+  analogWrite(DC1_2,speed);
 }
 
 // Motor1 역방향 회전
@@ -211,14 +251,29 @@ void M1_CCW()
 {
   // 0, 1
   digitalWrite(DC1_1, LOW); 
-  digitalWrite(DC1_2, HIGH);
+  //digitalWrite(DC1_2, HIGH);
+  //역방향, 255가 최대 속도
+  analogWrite(DC1_2,m1_speed);
 }
+
+void M2_CW() {
+  // 1, 0
+  //digitalWrite(DC2_1, HIGH);
+  //digitalWrite(DC2_2, LOW);
+
+  digitalWrite(DC2_2, HIGH);
+  int speed = 255 - m2_speed;
+  analogWrite(DC2_1,speed);
+
+}
+
 
 void M2_CCW()
 {
   // 0, 1
-  digitalWrite(DC2_1, LOW); 
-  digitalWrite(DC2_2, HIGH);
+  digitalWrite(DC2_2, LOW); 
+  // digitalWrite(DC2_2, HIGH);
+  analogWrite(DC2_1,m2_speed);
 }
 
 // Motor1 멈춤
