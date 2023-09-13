@@ -2,6 +2,7 @@
  * DC 모듈 코드
  * version 0.0.1
 */
+#include <Wire.h>
 #include "PinChangeInterrupt.h" // 라이브러리 추가 설치 필요
 
 #define BeepPin 12 // 부저
@@ -29,6 +30,7 @@ int motor1_position = 0;
 int motor1_direction = 1; // 1:정방향, 0:역방향
 int motor2_position = 0;
 int motor2_direction = 1; // 1:정방향, 0:역방향
+int motor1_max = 0, motor2_max = 0;
 
 // 모터속도 지정
 int m1_speed = 255, m2_speed=255;  // 모터 스피드
@@ -42,20 +44,7 @@ void setup() {
   pinMode(BeepPin, OUTPUT);
   beep(150); delay(150); // 삐빅
 
-
-}
-
-void beep(int time)
-{
-  // 초기화1 : 내부 LED
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  // 초기화2 : 비프 소리
-  digitalWrite(BeepPin, HIGH);
-  delay(time);
-  digitalWrite(BeepPin, LOW);
-
-  //초기화3 : 시리얼
+//초기화3 : 시리얼
   // 시리얼 초기화
   Serial.begin(115200);
   Serial.println("Module On");
@@ -94,6 +83,36 @@ void beep(int time)
 
   // 초기화7 : 모터센서 초기화
   motor_init();
+
+
+  // 초기화8: i2c 통신 설정, (A4, A5)
+  // 127개 통신
+  Wire.begin(1); // 각각 모듈 번호 지정
+  Wire.onReceive(receivedEvent);
+}
+
+/**
+ * I2C를 통하여 데이터 값을 전달 받음
+*/
+void receivedEvent(int howmany) {
+  int x;
+  x = Wire.read();
+  Serial.print(x);
+
+  parser(x);
+}
+
+void beep(int time)
+{
+  // 초기화1 : 내부 LED
+  pinMode(LED_BUILTIN, OUTPUT);
+
+  // 초기화2 : 비프 소리
+  digitalWrite(BeepPin, HIGH);
+  delay(time);
+  digitalWrite(BeepPin, LOW);
+
+  
   
 }
 
@@ -135,6 +154,7 @@ void motor_init() {
   Serial.print(motor1_direction);
   Serial.print(", motor max position=");
   Serial.println(motor1_position);
+  motor1_max = motor1_position;
 
 
   m1_target = 0;
@@ -303,12 +323,16 @@ void loop() {
     M2_CCW_step();
   }
 
-  char cmd;
+  char cmd; // 지역변수, loop 함수에서만 사용 가능
   
   if(Serial.available()){
     cmd = Serial.read();
+    parser(cmd);
+  }
+}
 
-    if(cmd == 10) { 
+void parser(char cmd) {
+  if(cmd == 10) { 
       // lf code (10)
     } else if( cmd >= 48 && cmd <= 57) {
       if(mode == 112) { //pwm set
@@ -392,7 +416,6 @@ void loop() {
       //Serial.print("current position = ");
       //Serial.println(motor_position);
     }
-  }
 }
 
 // ***_step = 버튼을 누르면 동작
@@ -456,10 +479,13 @@ void M1_CW_Move() {
   Serial.print(", target = ");
   Serial.println(m1_target);
 
-  // 시작트리거의 오류방지
-  if(motor1_position < m1_target) {
-    M1_CW();
-  } 
+  if(m1_target < motor1_max) {
+    // 시작트리거의 오류방지
+    if(motor1_position < m1_target) {
+      M1_CW();
+    }
+  }
+   
 }
 
 void M1_CCW_Move() {
@@ -472,10 +498,12 @@ void M1_CCW_Move() {
 
   // 시작트리거의 오류방지
   // 653 >  0
-  if(motor1_position > m1_target) {
-    Serial.println("motor1 CCW");
-    M1_CCW();
-  } 
+  if(m1_target > -100) {
+    if(motor1_position > m1_target) {
+      Serial.println("motor1 CCW");
+      M1_CCW();
+    } 
+  }
 }
 
 
