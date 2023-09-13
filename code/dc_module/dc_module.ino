@@ -22,6 +22,21 @@
 #define MOTOR2_ENCODER_A 3
 #define MOTOR2_ENCODER_B A1
 
+#define MOTOR1_ITR_A A2
+#define MOTOR1_ITR_B A3
+
+int motor1_position = 0;
+int motor1_direction = 1; // 1:정방향, 0:역방향
+int motor2_position = 0;
+int motor2_direction = 1; // 1:정방향, 0:역방향
+
+// 모터속도 지정
+int m1_speed = 255, m2_speed=255;  // 모터 스피드
+int m1_target = 0, m2_target = 0; // 이동해야 되는 위치
+//int m1_pos =0, m2_pos=0; // 현재 모터의 위치
+
+int m1_manual = 0, m2_manual = 0;
+
 void setup() {
   // 전원 입력시 삑 (1번)
   pinMode(BeepPin, OUTPUT);
@@ -71,24 +86,147 @@ void beep(int time)
   pinMode(MOTOR2_ENCODER_A, INPUT);
   attachInterrupt(digitalPinToInterrupt(MOTOR2_ENCODER_A), ISR_motor2, FALLING);
 
+
+  pinMode(MOTOR1_ITR_A, INPUT);
+  attachPCINT( digitalPinToPCINT(MOTOR1_ITR_A), motor1_potho_a, FALLING);
+  pinMode(MOTOR1_ITR_B, INPUT);
+  attachPCINT( digitalPinToPCINT(MOTOR1_ITR_B), motor1_potho_b, FALLING);
+
+  // 초기화7 : 모터센서 초기화
+  motor_init();
+  
 }
 
-int motor1_position = 0;
-int motor1_direction = 1; // 1:정방향, 0:역방향
-int motor2_position = 0;
-int motor2_direction = 1; // 1:정방향, 0:역방향
+void motor_init() {
+  int temp;
 
-void ISR_motor1() {
-  // 120 카운트 = 1바퀴
-  motor1_position++; //카운트
+  Serial.println("motor init");
+  m1_manual = 1; // 메뉴얼 동작
 
-  // 방향체크
-  byte encoderB = digitalRead(MOTOR1_ENCODER_B);
-  if (encoderB == HIGH) {
-    motor1_direction = 0;
-  } else {
-    motor1_direction = 1;
+  m1_speed = 60; //최소 스피드
+  M1_CCW();
+  while(1) { // 참조건
+    temp = digitalRead(MOTOR1_ITR_A);
+    if(temp == 0) {
+      M1_stop();
+      motor1_position = 0;  // 초기화    
+      break;
+    }
   }
+
+  Serial.print("init: motor1 direction =");
+  Serial.print(motor1_direction);
+  Serial.print(", motor start position=");
+  Serial.println(motor1_position);
+
+  Serial.println(">>>");
+
+
+  M1_CW();
+  while(1) { // 참조건
+    temp = digitalRead(MOTOR1_ITR_B);
+    if(temp == 0) {
+      M1_stop();      
+      break;
+    }
+  }
+
+  Serial.print("motor1 direction =");
+  Serial.print(motor1_direction);
+  Serial.print(", motor max position=");
+  Serial.println(motor1_position);
+
+
+  m1_target = 0;
+  M1_CCW_Move();
+  while(1) { // 참조건
+    Serial.print("motor1 direction =");
+    Serial.print(motor1_direction);
+    Serial.print("motor1_position = ");
+    Serial.print(motor1_position);
+    Serial.print(", m1_target = ");
+    Serial.println(m1_target);
+    if(motor1_position <= m1_target) {
+      M1_stop();
+      break;
+    }
+  }
+  // 0 653
+  
+  
+  /*
+  M1_CW();
+  while(1) { // 참조건
+    temp = digitalRead(MOTOR1_ITR_A);
+    if(temp == 0) {
+      M1_stop();
+      motor1_position = 0;
+      Serial.println("motor start position");
+      break;
+    }
+  }
+  */
+
+
+  
+}
+
+int m1_a_status = 0;
+int m1_b_status = 0;
+
+void motor1_potho_a() {
+  int temp = digitalRead(MOTOR1_ITR_A);
+  if(temp == 0) {
+    m1_a_status = 1;
+    Serial.print(temp);
+    Serial.println(": motor1 photo a = open");
+  }
+  
+  
+}
+
+void motor1_potho_b() {
+  int temp = digitalRead(MOTOR1_ITR_B);
+  if(temp == 0) {
+    m1_b_status = 1;
+    Serial.print(temp);
+    Serial.println(": motor1 photo b = open");
+  }
+}
+
+
+
+// 신호가 들어오면 동작하는 함수, 인터럽트
+void ISR_motor1() {
+    // 방향체크
+  byte encoderB = digitalRead(MOTOR1_ENCODER_B);
+  //Serial.println(encoderB);
+
+  if (encoderB == HIGH) {
+    // 역방향 CCW
+    motor1_direction = 1; // 정방향
+    // 120 카운트 = 1바퀴
+    motor1_position++; //카운트
+  } else {
+    // 정방향 CW
+    motor1_direction = 0;
+    // 120 카운트 = 1바퀴
+    motor1_position--; //카운트
+  }
+
+  if(m1_manual == 1) {
+
+  } else {
+      if(motor1_position > m1_target) {
+        
+        M1_stop();
+        Serial.print("ISR STOP >>");
+        Serial.println(motor1_position);
+      }
+  }
+
+
+
 }
 
 void ISR_motor2() {
@@ -143,10 +281,9 @@ void builtin_led_blank(int time=1000) {
   delay(time);                      // wait for a second
 }
 
-// 모터속도 지정
-int m1_speed = 255, m2_speed=255;
+
+
 char mode;
-int m1_target = 0, m2_target = 0;
 void loop() {
   builtin_led_blank(500); // 0.5초 깜빡임
 
@@ -179,19 +316,19 @@ void loop() {
         m2_speed = m1_speed;
         Serial.print("speed is ");
         Serial.println(m1_speed);
-      } else if (cmd == 101) { // e
+      } else if (mode == 101) { // e
         m1_target = m1_target * 10 + (cmd - 48); 
         Serial.print("m1 target ");
         Serial.println(m1_target);
-      } else if (cmd == 102) { // f
+      } else if (mode == 102) { // f
         m1_target = m1_target * 10 + (cmd - 48);
         Serial.print("m1 target ");
         Serial.println(m1_target);
-      } else if (cmd == 103) { // g
+      } else if (mode == 103) { // g
         m2_target = m1_target * 10 + (cmd - 48);
         Serial.print("m1 target ");
         Serial.println(m1_target);
-      } else if (cmd == 104) { // h
+      } else if (mode == 104) { // h
         m2_target = m1_target * 10 + (cmd - 48);
         Serial.print("m1 target ");
         Serial.println(m1_target);
@@ -218,15 +355,19 @@ void loop() {
       // 지정거리 이동
       mode = cmd;
       m1_target = 0;
+      Serial.println("motor1_cw_target set");
     } else if(cmd == 102) { //f
       mode = cmd;
       m1_target = 0;
+      Serial.println("motor1_ccw_target set");
     } else if(cmd == 103) { //g
       mode = cmd;
       m2_target = 0;
+      Serial.println("motor2_cw_target set");
     } else if(cmd == 104) { //h
       mode = cmd;
       m2_target = 0;
+      Serial.println("motor2_ccw_target set");
     } else if(cmd == 115) { //s
       // 모터2 (역회전)
       M1_stop();
@@ -236,7 +377,12 @@ void loop() {
       mode = cmd;
       m1_speed = 0;
       Serial.println("pwn speed set");
-    } else if(cmd == 109) { // m(109) 값 전달 받은 경우 이동
+    } else if(cmd == 109) { // 이동 m(109) 값 전달 받은 경우 이동
+      Serial.print("motor start : ");
+      if(mode== 101) { //e : 지정거리 CW
+        Serial.println("m1_cw");
+        M1_CW_Move();
+      }
       //motor_move(received_pos);
       //received_pos = 0;
     } else if(cmd == 100) { // d
@@ -249,7 +395,7 @@ void loop() {
   }
 }
 
-// 누르는 동작
+// ***_step = 버튼을 누르면 동작
 void M1_CW_step() {
   int temp;
   M1_CW();
@@ -300,6 +446,36 @@ void M2_CCW_step() {
       btn4_status = 0;
     }
   }
+}
+
+// 모터 target으로 이동하는 시작 트리거(방아쇠)
+void M1_CW_Move() {
+  // 모터가 동작을 시작할때 1번만 호출
+  Serial.print("current = ");
+  Serial.print(motor1_position);
+  Serial.print(", target = ");
+  Serial.println(m1_target);
+
+  // 시작트리거의 오류방지
+  if(motor1_position < m1_target) {
+    M1_CW();
+  } 
+}
+
+void M1_CCW_Move() {
+  // 모터가 동작을 시작할때 1번만 호출
+  Serial.print("current = ");
+  Serial.print(motor1_position);
+  Serial.print(", target = ");
+  Serial.println(m1_target);
+  Serial.println("--------");
+
+  // 시작트리거의 오류방지
+  // 653 >  0
+  if(motor1_position > m1_target) {
+    Serial.println("motor1 CCW");
+    M1_CCW();
+  } 
 }
 
 
@@ -354,6 +530,7 @@ void M1_stop()
   digitalWrite(DC1_1, LOW);
   digitalWrite(DC1_2, LOW);
 
+  Serial.print("STOP >>> ");
   Serial.print("motor1 direction = ");
   Serial.print(motor1_direction);
 
